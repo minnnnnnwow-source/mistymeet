@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Rectangle, Popup, useMap, ZoomControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { supabase } from './supabaseClient';
+import MessageModal from './MessageModal'; 
 
 // --- 工具函数：生成唯一的格子ID ---
 const GRID_SIZE = 0.0005; // 约50-60米精度
@@ -70,7 +71,7 @@ function LocationMarker({ setMyGrids }) {
 export default function App() {
   const [myGrids, setMyGrids] = useState({}); // 我去过的格子
   const [otherVisits, setOtherVisits] = useState({}); // 别人的数据缓存
-  const [selectedGridInfo, setSelectedGridInfo] = useState(null); // 弹窗信息
+  const [activeGrid, setActiveGrid] = useState(null); // 当前打开留言板的格子ID
 
   // 初始化：加载本地已存储的格子
   useEffect(() => {
@@ -86,14 +87,7 @@ export default function App() {
 
   // 点击格子时，查询Supabase数据
   const handleGridClick = async (gridId) => {
-    const { count, error } = await supabase
-      .from('visits')
-      .select('user_id', { count: 'exact', head: true }) // 只查数量
-      .eq('grid_id', gridId);
-    
-    if (!error) {
-      setSelectedGridInfo({ count, gridId });
-    }
+     setActiveGrid(gridId); // 只需要记录点了哪个，然后弹窗
   };
 
 return (
@@ -147,28 +141,25 @@ return (
           <Rectangle
             key={gridId}
             bounds={getGridBounds(gridId)}
-            pathOptions={{ color: '#10b981', weight: 0, fillOpacity: 0.5 }} // 去掉边框，只要色块
+            pathOptions={{ color: '#10b981', weight: 0, fillOpacity: 0.5 }} 
             eventHandlers={{
-              click: () => handleGridClick(gridId),
+              click: () => handleGridClick(gridId), // 点击打开弹窗
             }}
-          >
-            <Popup>
-              <div className="text-center p-2">
-                <p className="font-bold text-gray-800 mb-1">✨ 街区点亮 ✨</p>
-                {selectedGridInfo && selectedGridInfo.gridId === gridId ? (
-                  <p className="text-sm text-gray-600">
-                    在你之前，有 <strong className="text-green-600 text-lg">{selectedGridInfo.count}</strong> 人<br/>也独自走过这里
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-400">正在从时空隧道读取数据...</p>
-                )}
-              </div>
-            </Popup>
-          </Rectangle>
+          />
+          // 注意：这里删掉了原来的 <Popup>，因为我们要用新的弹窗了
         ))}
 
         <LocationMarker setMyGrids={setMyGrids} />
       </MapContainer>
+
+      {/* 👇 新增：如果有选中的格子，就显示留言板 */}
+      {activeGrid && (
+        <MessageModal 
+          gridId={activeGrid} 
+          onClose={() => setActiveGrid(null)} 
+        />
+      )}
+             
     </div>
   );
 }
