@@ -91,18 +91,16 @@ function MapController({ targetGrid }) {
   return null;
 }
 
-// --- 组件：回到当前位置按钮 ---
+// --- 组件：回到当前位置按钮 (UI升级版) ---
 function RecenterButton() {
   const map = useMap();
 
   const handleRecenter = () => {
-    // 获取当前浏览器定位
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        // 飞回去！
         map.flyTo([latitude, longitude], 16, {
-          duration: 1.5 // 飞行时间 1.5秒
+          duration: 1.5
         });
       },
       (err) => alert("无法获取位置，请检查GPS权限"),
@@ -113,30 +111,21 @@ function RecenterButton() {
   return (
     <button
       onClick={handleRecenter}
-      className="leaflet-bar leaflet-control" // 利用Leaflet自带的类名保证层级正确
-      style={{
-        position: 'absolute',
-        bottom: '80px', // 放在缩放按钮上面 (Leaflet默认缩放按钮在右下角)
-        right: '10px',
-        zIndex: 1000,
-        backgroundColor: 'white',
-        width: '34px',
-        height: '34px',
-        borderRadius: '4px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        boxShadow: '0 1px 5px rgba(0,0,0,0.65)',
-        border: 'none'
-      }}
+      // 👇 使用 Tailwind 类名来控制样式，更灵活
+      // bottom-24: 距离底部约 96px，足够避开缩放按钮
+      // right-5: 距离右边 20px
+      // rounded-full: 变成正圆形，更像 App 按钮
+      className="absolute bottom-28 right-4 z-[900] bg-white text-gray-700 w-12 h-12 rounded-full shadow-xl flex items-center justify-center border border-gray-100 active:scale-90 transition-transform hover:text-green-600"
       title="回到我的位置"
     >
-      {/* 靶心图标 SVG */}
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="12" y1="8" x2="12" y2="16"></line>
-        <line x1="8" y1="12" x2="16" y2="12"></line>
+      {/* 👇 图标换成了：导航箭头 (Paper Airplane style) */}
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        viewBox="0 0 24 24" 
+        fill="currentColor" 
+        className="w-6 h-6 ml-0.5 mt-0.5" // 微调一点位置让视觉居中
+      >
+        <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
       </svg>
     </button>
   );
