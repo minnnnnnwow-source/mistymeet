@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Rectangle, Popup, useMap, ZoomControl } from 'react-leaflet';
+import GlobalFeed from './GlobalFeed';
 import 'leaflet/dist/leaflet.css';
 import { supabase } from './supabaseClient';
 import MessageModal from './MessageModal'; 
+
+
 
 // --- 工具函数：生成唯一的格子ID ---
 const GRID_SIZE = 0.0005; // 约50-60米精度
@@ -24,7 +27,7 @@ const getGridBounds = (gridId) => {
 // --- 组件：自动定位并更新视图 ---
 function LocationMarker({ setMyGrids }) {
   const map = useMap();
-  
+
   useEffect(() => {
     // 生成一个临时的用户ID (存在浏览器里)
     let userId = localStorage.getItem('misty_user_id');
@@ -67,99 +70,153 @@ function LocationMarker({ setMyGrids }) {
   return null;
 }
 
-// --- 主程序 ---
-export default function App() {
-  const [myGrids, setMyGrids] = useState({}); // 我去过的格子
-  const [otherVisits, setOtherVisits] = useState({}); // 别人的数据缓存
-  const [activeGrid, setActiveGrid] = useState(null); // 当前打开留言板的格子ID
-
-  // 初始化：加载本地已存储的格子
+  // --- 组件：控制地图飞行 ---
+function MapController({ targetGrid }) {
+  const map = useMap();
+  
   useEffect(() => {
-    const loadedGrids = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key.startsWith('visited_')) {
-        loadedGrids[key.replace('visited_', '')] = true;
-      }
+    if (targetGrid) {
+      const bounds = getGridBounds(targetGrid);
+      // 计算中心点
+      const centerLat = (bounds[0][0] + bounds[1][0]) / 2;
+      const centerLng = (bounds[0][1] + bounds[1][1]) / 2;
+      
+      // 飞过去！
+      map.flyTo([centerLat, centerLng], 18, {
+        duration: 2 // 飞行时间2秒，很有电影感
+      });
     }
-    setMyGrids(loadedGrids);
-  }, []);
+  }, [targetGrid, map]);
 
-  // 点击格子时，查询Supabase数据
-  const handleGridClick = async (gridId) => {
-     setActiveGrid(gridId); // 只需要记录点了哪个，然后弹窗
+  return null;
+}
+
+// --- 组件：回到当前位置按钮 ---
+function RecenterButton() {
+  const map = useMap();
+
+  const handleRecenter = () => {
+    // 获取当前浏览器定位
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        // 飞回去！
+        map.flyTo([latitude, longitude], 16, {
+          duration: 1.5 // 飞行时间 1.5秒
+        });
+      },
+      (err) => alert("无法获取位置，请检查GPS权限"),
+      { enableHighAccuracy: true }
+    );
   };
 
-return (
-    <div className="relative w-full h-screen font-sans">
-      {/* 顶部标题栏 - 居中 + 阴影增强 */}
-      <div style={{
+  return (
+    <button
+      onClick={handleRecenter}
+      className="leaflet-bar leaflet-control" // 利用Leaflet自带的类名保证层级正确
+      style={{
         position: 'absolute',
-        top: 0,
-        left: 0,
+        bottom: '80px', // 放在缩放按钮上面 (Leaflet默认缩放按钮在右下角)
+        right: '10px',
         zIndex: 1000,
-        width: '100%',
-        paddingTop: '40px', // 避开手机顶部状态栏
-        paddingBottom: '20px',
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%)', // 更深的渐变
-        color: 'white',
-        textAlign: 'center', // 👈 居中对齐
-        pointerEvents: 'none'
-      }}>
-        <h1 style={{ 
-          margin: 0, 
-          fontSize: '28px', 
-          fontWeight: '800', 
-          letterSpacing: '1px',
-          textShadow: '0 2px 10px rgba(0,0,0,0.5)' // 文字加点阴影更立体
-        }}>
-          MistyMeet 🗺️
-        </h1>
-        <p style={{ margin: '4px 0 0 0', fontSize: '13px', opacity: 0.8, fontWeight: '500' }}>
-          已探索: <span style={{color: '#34d399', fontWeight: 'bold'}}>{Object.keys(myGrids).length}</span> 个街区
-        </p>
-      </div>
+        backgroundColor: 'white',
+        width: '34px',
+        height: '34px',
+        borderRadius: '4px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        boxShadow: '0 1px 5px rgba(0,0,0,0.65)',
+        border: 'none'
+      }}
+      title="回到我的位置"
+    >
+      {/* 靶心图标 SVG */}
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="16"></line>
+        <line x1="8" y1="12" x2="16" y2="12"></line>
+      </svg>
+    </button>
+  );
+}
+
+
+// --- 主程序 ---
+export default function App() {
+  const [myGrids, setMyGrids] = useState({});
+  const [activeGrid, setActiveGrid] = useState(null);
+  
+  // 新增状态：控制地图飞行的目标
+  const [flyTarget, setFlyTarget] = useState(null); 
+
+  // ... (useEffect 加载本地数据的代码保持不变) ...
+
+  const handleGridClick = (gridId) => {
+    setActiveGrid(gridId);
+  };
+
+  // 处理从"世界回声"点击飞行的事件
+  const handleGlobalFly = (gridId) => {
+    setFlyTarget(gridId); // 触发飞行
+    setTimeout(() => {
+      setActiveGrid(gridId); // 飞行开始后，自动打开留言板（只读模式）
+    }, 2000); // 2秒后（等飞到了）再打开
+  };
+
+  return (
+    <div className="relative w-full h-screen font-sans">
+      {/* 顶部标题栏代码保持不变... */}
+      
+      {/* 👇 插入新组件：世界回声 */}
+      <GlobalFeed onFlyTo={handleGlobalFly} />
 
       <MapContainer 
         center={[39.9, 116.4]} 
         zoom={15} 
         scrollWheelZoom={true} 
-        zoomControl={false} // 👈 关掉默认左上角的按钮
+        zoomControl={false} 
         style={{ height: '100vh', width: '100%', background: '#0a0a0a' }}
       >
-        {/* 把缩放按钮放到右下角 */}
         <ZoomControl position="bottomright" />
-
-        {/* 深色地图底图 */}
-        <TileLayer
-          attribution='&copy; OpenStreetMap'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
+        <RecenterButton />
+        <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
         
-        {/* 渲染我去过的格子 */}
+        {/* 渲染绿色格子...保持不变... */}
         {Object.keys(myGrids).map(gridId => (
           <Rectangle
             key={gridId}
             bounds={getGridBounds(gridId)}
             pathOptions={{ color: '#10b981', weight: 0, fillOpacity: 0.5 }} 
-            eventHandlers={{
-              click: () => handleGridClick(gridId), // 点击打开弹窗
-            }}
+            eventHandlers={{ click: () => handleGridClick(gridId) }}
           />
-          // 注意：这里删掉了原来的 <Popup>，因为我们要用新的弹窗了
         ))}
 
+        {/* 渲染 "我要飞去的那个格子" (如果是远程查看，用黄色显示一下，方便看到) */}
+        {flyTarget && !myGrids[flyTarget] && (
+           <Rectangle
+             bounds={getGridBounds(flyTarget)}
+             pathOptions={{ color: '#f59e0b', weight: 1, fillOpacity: 0.3 }} // 黄色
+           />
+        )}
+
         <LocationMarker setMyGrids={setMyGrids} />
+        
+        {/* 👇 插入飞行控制器 */}
+        <MapController targetGrid={flyTarget} />
+        
       </MapContainer>
 
-      {/* 👇 新增：如果有选中的格子，就显示留言板 */}
+      {/* 留言板弹窗 */}
       {activeGrid && (
         <MessageModal 
           gridId={activeGrid} 
-          onClose={() => setActiveGrid(null)} 
+          onClose={() => setActiveGrid(null)}
+          // 👇 核心逻辑：只有在 myGrids 里的格子（我去过的），才能回复！
+          canReply={!!myGrids[activeGrid]} 
         />
       )}
-             
     </div>
   );
 }
