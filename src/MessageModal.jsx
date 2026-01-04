@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 
-// 新增 prop: canReply
 export default function MessageModal({ gridId, onClose, canReply }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [nickname, setNickname] = useState(localStorage.getItem('misty_nickname') || '');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,18 +27,26 @@ export default function MessageModal({ gridId, onClose, canReply }) {
   const handleSend = async () => {
     if (!inputText.trim()) return;
     
-    let currentName = nickname;
+    // 1. 获取昵称，没有则随机
+    let currentName = localStorage.getItem('misty_nickname');
     if (!currentName) {
       currentName = '旅行者' + Math.floor(Math.random() * 1000);
       localStorage.setItem('misty_nickname', currentName);
-      setNickname(currentName);
     }
+
+    // 2. 获取头像 (默认宇航员)
+    const currentAvatar = localStorage.getItem('misty_avatar') || '👨‍🚀';
+    
+    // 3. 组合成显示名称： "👨‍🚀 你的名字"
+    const displayName = `${currentAvatar} ${currentName}`;
+
     const userId = localStorage.getItem('misty_user_id');
 
+    // 4. 发送数据
     const { error } = await supabase.from('messages').insert({
       grid_id: gridId,
       user_id: userId,
-      nickname: currentName,
+      nickname: displayName, // 发送组合好的名字
       content: inputText
     });
 
@@ -48,7 +54,7 @@ export default function MessageModal({ gridId, onClose, canReply }) {
       alert("发送失败: " + error.message);
     } else {
       setInputText('');
-      fetchMessages();
+      fetchMessages(); // 刷新列表
     }
   };
 
@@ -58,6 +64,7 @@ export default function MessageModal({ gridId, onClose, canReply }) {
         className="w-full max-w-md bg-white rounded-t-2xl p-4 h-[65vh] flex flex-col shadow-2xl animate-slide-up"
         onClick={e => e.stopPropagation()}
       >
+        {/* 顶部把手 */}
         <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4"></div>
         
         <div className="flex justify-between items-center mb-2">
@@ -67,6 +74,7 @@ export default function MessageModal({ gridId, onClose, canReply }) {
           <span className="text-xs text-gray-400 font-mono">{gridId}</span>
         </div>
 
+        {/* 留言列表 */}
         <div className="flex-1 overflow-y-auto mb-4 space-y-3 p-2 bg-gray-50 rounded-lg">
           {loading ? (
             <p className="text-center text-gray-400 text-sm mt-4">信号接收中...</p>
@@ -79,6 +87,7 @@ export default function MessageModal({ gridId, onClose, canReply }) {
             messages.map(msg => (
               <div key={msg.id} className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
                 <div className="flex justify-between items-baseline mb-1">
+                  {/* 这里显示带头像的昵称 */}
                   <span className="font-bold text-sm text-green-700">{msg.nickname}</span>
                   <span className="text-xs text-gray-400">
                     {new Date(msg.created_at).toLocaleDateString()}
@@ -90,7 +99,7 @@ export default function MessageModal({ gridId, onClose, canReply }) {
           )}
         </div>
 
-        {/* 👇 核心修改：只有 canReply 为 true 才显示输入框 */}
+        {/* 输入框区域：只有 canReply 为 true 才显示 */}
         {canReply ? (
           <div className="flex gap-2 border-t pt-3">
             <input

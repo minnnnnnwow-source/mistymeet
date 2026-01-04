@@ -6,11 +6,13 @@ export default {
   ],
   theme: {
     extend: {
-      // 这里是我们为 V1.1 留言板添加的动画
+      // 1. 定义动画名称
       animation: {
         'slide-up': 'slideUp 0.3s ease-out',
         'fade-in': 'fadeIn 0.2s ease-out',
+        'scale-up': 'scaleUp 0.2s ease-out',
       },
+      // 2. 定义关键帧细节
       keyframes: {
         slideUp: {
           '0%': { transform: 'translateY(100%)' },
@@ -19,6 +21,10 @@ export default {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        scaleUp: {
+          '0%': { transform: 'scale(0.9)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
         }
       }
     },
